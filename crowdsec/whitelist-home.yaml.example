@@ -1,0 +1,8 @@
+name: custom/whitelist-home-ip
+description: "Whitelist home IP addresses"
+whitelist:
+  reason: "home network - trusted"
+  ip:
+    - "YOUR_IPV6_ADDRESS_1"
+    - "YOUR_IPV6_ADDRESS_2"
+    - "YOUR_IPV4_ADDRESS"

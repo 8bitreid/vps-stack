@@ -1,0 +1,27 @@
+repos:
+  # 1. Basic File & Syntax Validation
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-yaml
+        args: ['--allow-multiple-documents']
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+
+  # 2. Secret Scanning (Prevents committing API keys, tokens, or certs)
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.2
+    hooks:
+      - id: gitleaks
+
+  # 3. Docker Compose Syntax & Path Validation
+  - repo: local
+    hooks:
+      - id: docker-compose-config
+        name: Validate Docker Compose Configuration
+        entry: docker compose config -q
+        language: system
+        files: ^compose\.yml$
+        pass_filenames: false

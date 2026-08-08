@@ -1,0 +1,21 @@
+# Custom HTTP probing scenario - less aggressive
+type: leaky
+name: crowdsecurity/http-probing
+description: "Detect site scanning/probing from a single ip (relaxed thresholds)"
+# Exclude 403s with OriginStatus 0 (CrowdSec blocks) to prevent feedback loops
+filter: "evt.Meta.service == 'http' && evt.Meta.http_status in ['404', '400'] && evt.Parsed.static_ressource == 'false'"
+groupby: "evt.Meta.source_ip + '/' + evt.Parsed.target_fqdn"
+distinct: "evt.Meta.http_path"
+capacity: 35  # Further increased to 35 - requires more suspicious requests
+reprocess: true
+leakspeed: "15s"  # Increased leak speed for faster recovery
+blackhole: 5m
+labels:
+  remediation: true
+  classification:
+    - attack.T1595
+  behavior: "http:scan"
+  label: "HTTP Probing"
+  spoofable: 0
+  service: http
+  confidence: 1

@@ -1,0 +1,198 @@
+secrets:
+  cf_api_token:
+    file: ./cloudflare.env
+
+services:
+
+  traefik:
+    image: "traefik:v3.7.7"
+    container_name: "traefik"
+    command:
+      - "--configFile=/etc/traefik/traefik.yml"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "${HOST_TAILSCALE_IP}:8082:8082"  # Prometheus metrics endpoint - accessible via Tailscale VPN only
+    environment:
+      # Cloudflare API token for DNS challenge
+      - CLOUDFLARE_DNS_API_TOKEN_FILE=/run/secrets/cf_api_token
+      - CROWDSEC_LAPI_KEY=${CROWDSEC_LAPI_KEY}
+      - NEBULA_TAILSCALE_ADDRESS=${NEBULA_TAILSCALE_ADDRESS}
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./letsencrypt:/letsencrypt"
+      - "./traefik.yml:/etc/traefik/traefik.yml:ro"
+      - "./dynamic-config.yml:/etc/traefik/dynamic-config.yml:ro"
+      - "./traefik-logs:/var/log/traefik"
+    secrets:
+      - cf_api_token
+    depends_on:
+      crowdsec:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - web
+      - management
+    restart: unless-stopped
+
+  crowdsec:
+    image: crowdsecurity/crowdsec:latest
+    container_name: crowdsec
+    environment:
+      - COLLECTIONS=crowdsecurity/traefik crowdsecurity/http-cve crowdsecurity/appsec-virtual-patching crowdsecurity/appsec-generic-rules crowdsecurity/iptables
+      - GID=988  # Docker group GID for socket access
+      - UID=1000
+    volumes:
+      - crowdsec-config:/etc/crowdsec  # Persist enrollment credentials and config across updates
+      - ./crowdsec:/var/lib/crowdsec/data
+      - ./appsec.yaml:/etc/crowdsec/acquis.d/appsec.yaml:ro
+      - ./traefik-logs.yaml:/etc/crowdsec/acquis.d/traefik-logs.yaml:ro
+      - ./ufw-logs.yaml:/etc/crowdsec/acquis.d/ufw-logs.yaml:ro
+      - ./http-discord.yaml:/etc/crowdsec/notifications/http.yaml:ro  # Discord via HTTP notifications
+      - ./profiles-discord.yaml:/etc/crowdsec/profiles.yaml:ro  # Profiles with Discord notifications
+      - ./crowdsec/whitelist-home.yaml:/etc/crowdsec/parsers/s02-enrich/whitelist-home.yaml:ro  # Whitelist home IPs
+      - ./crowdsec/http-probing-custom.yaml:/etc/crowdsec/scenarios/http-probing.yaml:ro  # Custom less aggressive http-probing
+      - ./crowdsec/http-crawl-non_statics-custom.yaml:/etc/crowdsec/scenarios/http-crawl-non_statics.yaml:ro  # Local override to avoid Jellyseerr API false positives
+      - ./traefik-logs:/var/log/traefik:ro
+      - /var/log/auth.log:/var/log/auth.log:ro
+      - /var/log/syslog:/var/log/syslog:ro
+      - /var/log/ufw.log:/var/log/ufw.log:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Required for Docker log collection
+    ports:
+      - "127.0.0.1:8080:8080"  # LAPI (localhost)
+      - "${HOST_TAILSCALE_IP}:8080:8080"  # LAPI (Tailscale IP)
+      - "127.0.0.1:7422:7422"  # AppSec
+      - "${HOST_TAILSCALE_IP}:6060:6060"  # Prometheus metrics endpoint - accessible via Tailscale VPN only
+    healthcheck:
+      test: ["CMD", "cscli", "lapi", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - management
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    privileged: true
+    # --- ADD THIS SECTION ---
+    labels:
+      - "traefik.enable=false"
+    ports:
+      # This forces Docker to ONLY listen on the Tailscale interface
+      - "${HOST_TAILSCALE_IP}:8081:8080"
+    command:
+      - '--docker_only=true'
+      - '--housekeeping_interval=30s'
+      - '--max_housekeeping_interval=35s'
+      - '--store_container_labels=false'
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  wud:
+    image: getwud/wud:latest
+    container_name: wud
+    environment:
+      - TZ=America/Chicago
+      - WUD_WATCHER_LOCAL_CRON=0 * * * *
+      - WUD_WATCHER_LOCAL_WATCHBYDEFAULT=true
+      - WUD_TRIGGER_DOCKER_LOCAL_PRUNE=true
+      - WUD_TRIGGER_DOCKER_LOCAL_THRESHOLD=all
+      - WUD_TRIGGER_DISCORD_1_URL=${WUD_DISCORD_WEBHOOK}
+      - WUD_TRIGGER_DISCORD_1_MODE=batch
+      - WUD_TRIGGER_DISCORD_1_BOTUSERNAME=WUD
+      - WUD_TRIGGER_DISCORD_1_BATCHTITLE=Container Updates ($${count})
+    ports:
+      - "${HOST_TAILSCALE_IP}:3000:3000"   # bind only to Tailscale IP
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./wud/store:/store:rw
+    labels:
+      - "wud.watch=false"
+      - "traefik.enable=false"
+    networks:
+      - management
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: promtail
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./loki/promtail-config.yaml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/log:/var/log:ro
+      - ./traefik-logs:/host/traefik-logs:ro
+      - promtail-positions:/positions
+    environment:
+      - TZ=America/Chicago
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep promtail > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  node_exporter:
+    image: quay.io/prometheus/node-exporter:latest
+    container_name: node_exporter
+    command:
+      - '--path.rootfs=/host'
+      - '--web.listen-address=${HOST_TAILSCALE_IP}:9100'  # Bind only to Tailscale IP
+    network_mode: host
+    pid: host
+    uts: host
+    volumes:
+      - '/:/host:ro,rslave'
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --tries=1 --timeout=5 http://${HOST_TAILSCALE_IP}:9100/metrics -O - > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  promtail-positions:
+    driver: local
+  crowdsec-config:
+    driver: local
+
+# Network segmentation for improved security
+networks:
+  # External-facing services (Traefik, reverse proxy)
+  web:
+    driver: bridge
+
+  # Database services (isolated from external access)
+  database:
+    driver: bridge
+    internal: true
+
+  # Monitoring services (Loki, Promtail, Node Exporter)
+  monitoring:
+    driver: bridge
+
+  # Management services (Watchtower, CrowdSec)
+  management:
+    driver: bridge

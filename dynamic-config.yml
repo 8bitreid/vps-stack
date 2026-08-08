@@ -1,0 +1,182 @@
+# Dynamic configuration
+http:
+  middlewares:
+    # GeoBlock - US only filtering using Cloudflare header (applied before CrowdSec to reduce load)
+    geoblock:
+      plugin:
+        geoblock:
+          silentStartUp: false
+          allowLocalRequests: true  # Allow private IPs (Docker, localhost, Tailscale)
+          logLocalRequests: false
+          logAllowedRequests: false
+          logApiRequests: false
+          ipGeolocationHttpHeaderField: "CF-IPCountry"  # Use Cloudflare's free header (case-sensitive!)
+          api: "https://get.geojs.io/v1/ip/country/{ip}"  # Fallback API if header not present
+          apiTimeoutMs: 750
+          cacheSize: 100
+          allowUnknownCountries: false
+          blackListMode: false  # Whitelist mode - only allow listed countries
+          addCountryHeader: true  # Adds X-IPCountry header to requests - visible in access logs
+          countries:
+            - US  # United States only
+          excludedPathPatterns:
+            - "^[^/]+/health$"  # Health checks
+            - "^[^/]+/status$"  # Status endpoints
+          httpStatusCodeDeniedRequest: 403
+
+    crowdsec:
+      plugin:
+        bouncer:
+          enabled: true
+          crowdsecLapiKey: '{{ env "CROWDSEC_LAPI_KEY" }}'
+          crowdsecLapiHost: "crowdsec:8080"
+          crowdsecAppsecEnabled: true
+          crowdsecAppsecHost: "crowdsec:7422"
+          crowdsecAppsecFailureBlock: true
+          crowdsecAppsecUnreachableBlock: true
+
+    # Middleware to block access with redirect
+    block-access:
+      redirectRegex:
+        regex: ".*"
+        replacement: "data:text/plain;charset=utf-8,403%20Forbidden%3A%20Access%20to%20this%20endpoint%20is%20not%20allowed"
+        permanent: false
+
+    # General security headers for all services (applied via Docker labels)
+    secure-headers:
+      headers:
+        customResponseHeaders:
+          Strict-Transport-Security: "max-age=31536000; includeSubDomains"
+          X-Frame-Options: "SAMEORIGIN"
+          X-Content-Type-Options: "nosniff"
+          Referrer-Policy: "strict-origin-when-cross-origin"
+          Permissions-Policy: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+          Content-Security-Policy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' wss: ws: https:; frame-ancestors 'self'; media-src 'self' blob:"
+          Server: ""
+          X-Powered-By: ""
+
+    nebula-headers:
+      headers:
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+          X-Forwarded-Host: "nebula.cloud-m3.com"
+        customResponseHeaders:
+         # Strip Jellyfin identity headers
+          X-Jellyfin-Os: ""
+          X-Jellyfin-Runtime: ""
+          Strict-Transport-Security: "max-age=31536000; includeSubDomains"
+          X-Frame-Options: "SAMEORIGIN"
+          X-Content-Type-Options: "nosniff"
+          Referrer-Policy: "strict-origin-when-cross-origin"
+          Permissions-Policy: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+          # Relaxed CSP to allow Jellyfin plugins like media bar to work
+          Content-Security-Policy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; script-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.gstatic.com https://www.youtube.com; style-src 'self' 'unsafe-inline' https:; style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' wss: ws: https:; frame-ancestors 'self'; frame-src 'self' https://www.youtube.com; media-src 'self' blob: data: https:;"
+          # CORS headers restricted to this domain only
+          Access-Control-Allow-Origin: "https://nebula.cloud-m3.com"
+          Access-Control-Allow-Methods: "GET, POST, PUT, DELETE, OPTIONS"
+          Access-Control-Allow-Headers: "Content-Type, Authorization, X-Emby-Token, X-MediaBrowser-Token"
+          Server: ""
+          X-Powered-By: ""
+
+    jellygate-headers:
+      headers:
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+          X-Forwarded-Host: "jellygate.cloud-m3.com"
+        customResponseHeaders:
+          Strict-Transport-Security: "max-age=31536000; includeSubDomains"
+          X-Frame-Options: "SAMEORIGIN"
+          X-Content-Type-Options: "nosniff"
+          Referrer-Policy: "strict-origin-when-cross-origin"
+          Permissions-Policy: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+          # Allow Google Fonts for jellygate
+          Content-Security-Policy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' wss: ws: https:; frame-ancestors 'self'; media-src 'self' blob:"
+          Server: ""
+          X-Powered-By: ""
+    seerr-headers:
+      headers:
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+          X-Forwarded-Host: "seerr.cloud-m3.com"
+        customResponseHeaders:
+          Strict-Transport-Security: "max-age=31536000; includeSubDomains"
+          X-Frame-Options: "SAMEORIGIN"
+          X-Content-Type-Options: "nosniff"
+          Referrer-Policy: "strict-origin-when-cross-origin"
+          Permissions-Policy: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+          # Allow Google Fonts for seerr
+          Content-Security-Policy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' wss: ws: https:; frame-ancestors 'self'; media-src 'self' blob:"
+          Server: ""
+          X-Powered-By: ""
+
+
+  routers:
+    # Explicit router for traefik.cloud-m3.com — no service exposed, but ensures
+    # security headers are sent even on the 404 response
+    traefik-dashboard:
+      rule: "Host(`traefik.cloud-m3.com`)"
+      middlewares:
+        - "geoblock"
+        - "secure-headers"
+        - "crowdsec"
+      entrypoints:
+        - "websecure"
+      tls:
+        certResolver: "myresolver"
+      service: "noop@internal"
+
+    nebula:
+      rule: "Host(`nebula.cloud-m3.com`)"
+      middlewares:
+        - "geoblock"
+        - "nebula-headers"
+        - "crowdsec"
+      entrypoints:
+        - "websecure"
+      tls:
+        certResolver: "myresolver"
+      service: "nebula"
+      priority: 1
+
+    seerr:
+      rule: "Host(`request.cloud-m3.com`)"
+      middlewares:
+        - "geoblock"
+        - "seerr-headers"
+        - "crowdsec"
+      entrypoints:
+        - "websecure"
+      tls:
+        certResolver: "myresolver"
+      service: "seerr"
+      priority: 1
+
+    nebula-metrics-block:
+      rule: "Host(`nebula.cloud-m3.com`) && PathPrefix(`/metrics`)"
+      middlewares:
+        - "block-access"
+      entrypoints:
+        - "websecure"
+      tls:
+        certResolver: "myresolver"
+      priority: 100  # Higher priority than main nebula router
+      service: "noop@internal"  # Use internal noop service
+
+  services:
+    nebula:
+      loadBalancer:
+        servers:
+          - url: '{{ env "NEBULA_TAILSCALE_ADDRESS" }}:8096'
+        passHostHeader: true
+        # Forward real client IP to Nebula
+        responseForwarding:
+          flushInterval: "100ms"
+
+    seerr:
+      loadBalancer:
+        servers:
+          - url: '{{ env "NEBULA_TAILSCALE_ADDRESS" }}:5055'
+        passHostHeader: true
+        # Forward real client IP to Seerr
+        responseForwarding:
+          flushInterval: "100ms"

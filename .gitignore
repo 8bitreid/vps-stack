@@ -1,0 +1,56 @@
+# ==============================================================================
+# SECRETS & ENVIRONMENT FILES
+# ==============================================================================
+*.env
+*.env.*
+*.secret
+*.key
+*.pem
+
+# Specific secret files in this stack
+cloudflare.env
+
+# CrowdSec notification configs with webhooks
+http-discord.yaml
+
+# ==============================================================================
+# DYNAMIC DATA, STATE & CERTIFICATES
+# ==============================================================================
+# Traefik ACME certificates & private keys
+letsencrypt/
+acme.json
+
+# CrowdSec dynamic state, databases, credentials, and trace dumps
+crowdsec/data/
+crowdsec/hub/
+crowdsec/*.db
+crowdsec/*.db-journal
+crowdsec/*.mmdb
+crowdsec/*.txt
+crowdsec/*.json
+crowdsec/trace
+crowdsec/online_api_credentials.yaml
+crowdsec/local_api_credentials.yaml
+crowdsec/whitelist-home.yaml
+
+# What's Up Docker persistent database/store
+wud/store/
+
+# Promtail position state & Loki runtime directories
+loki/data/
+promtail-positions
+
+# ==============================================================================
+# LOG FILES
+# ==============================================================================
+*.log
+traefik-logs/
+/var/log/
+
+# ==============================================================================
+# OS & EDITOR CLUTTER
+# ==============================================================================
+.DS_Store
+.idea/
+.vscode/
+*.swp

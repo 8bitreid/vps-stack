@@ -1,0 +1,60 @@
+type: http
+name: http_default
+log_level: info
+group_wait: 10s
+group_threshold: 1
+max_retry: 3
+timeout: 10s
+
+format: |
+  {
+    "embeds": [
+      {{range ,  := . -}}
+      {{if }},{{end}}
+      {
+        "title": "🚨 CrowdSec Security Alert",
+        "color": 15158332,
+        "description": "**Source IP:** `{{.Source.IP}}`{{if .Source.Cn}} :flag_{{.Source.Cn | lower}}:{{end}}\n**Attack Type:** `{{.Scenario}}`{{if .Message}}\n*{{.Message}}*{{end}}",
+        "fields": [
+          {{range ,  := .Decisions -}}
+          {{if }},{{end}}
+          {
+            "name": "🔒 Action Taken",
+            "value": "**{{.Type | upper}}** IP `{{.Value}}` for **{{.Duration}}**",
+            "inline": false
+          },
+          {
+            "name": "🔎 Request Info",
+            "value": "**Host:** `{{ or (GetMeta  "target_fqdn") (GetMeta  "target_host") "unknown" }}`\n**Path:** `{{ or (GetMeta  "http_path") (GetMeta  "target_uri") "unknown" }}`",
+            "inline": false
+          },
+          {
+            "name": "🌍 Location & Network",
+            "value": "{{if .Source.Cn}}:flag_{{.Source.Cn | lower}}: **{{.Source.Cn}}**{{else}}Unknown{{end}}{{if .Source.AsName}}\n🏢 {{.Source.AsName}}{{end}}{{if .Source.AsNumber}} (AS{{.Source.AsNumber}}){{end}}{{if .Source.Range}}\n📡 Range: `{{.Source.Range}}`{{end}}",
+            "inline": false
+          },
+          {
+            "name": "⏰ Timeline",
+            "value": "**Started:** {{.StartAt}}\n**Stopped:** {{.StopAt}}",
+            "inline": true
+          },
+          {
+            "name": "📊 Detection Info",
+            "value": "**Capacity:** {{.Capacity}}\n**Leak Speed:** {{.Leakspeed}}",
+            "inline": true
+          }
+          {{end -}}
+        ],
+        "footer": {
+          "text": "CrowdSec Security • srv904135 • cloud-m3.com"
+        },
+        "timestamp": "{{.CreatedAt}}"
+      }
+      {{end -}}
+    ]
+  }
+
+url: "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN"
+method: POST
+headers:
+  Content-Type: "application/json"
