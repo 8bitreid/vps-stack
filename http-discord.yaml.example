@@ -9,15 +9,15 @@ timeout: 10s
 format: |
   {
     "embeds": [
-      {{range ,  := . -}}
-      {{if }},{{end}}
+      {{range $idx, $alert := . -}}
+      {{if $idx}},{{end}}
       {
         "title": "🚨 CrowdSec Security Alert",
         "color": 15158332,
         "description": "**Source IP:** `{{.Source.IP}}`{{if .Source.Cn}} :flag_{{.Source.Cn | lower}}:{{end}}\n**Attack Type:** `{{.Scenario}}`{{if .Message}}\n*{{.Message}}*{{end}}",
         "fields": [
-          {{range ,  := .Decisions -}}
-          {{if }},{{end}}
+          {{range $didx, $decision := .Decisions -}}
+          {{if $didx}},{{end}}
           {
             "name": "🔒 Action Taken",
             "value": "**{{.Type | upper}}** IP `{{.Value}}` for **{{.Duration}}**",
@@ -25,22 +25,22 @@ format: |
           },
           {
             "name": "🔎 Request Info",
-            "value": "**Host:** `{{ or (GetMeta  "target_fqdn") (GetMeta  "target_host") "unknown" }}`\n**Path:** `{{ or (GetMeta  "http_path") (GetMeta  "target_uri") "unknown" }}`",
+            "value": "**Host:** `{{ or (GetMeta $alert "target_fqdn") (GetMeta $alert "target_host") "unknown" }}`\n**Path:** `{{ or (GetMeta $alert "http_path") (GetMeta $alert "target_uri") "unknown" }}`",
             "inline": false
           },
           {
             "name": "🌍 Location & Network",
-            "value": "{{if .Source.Cn}}:flag_{{.Source.Cn | lower}}: **{{.Source.Cn}}**{{else}}Unknown{{end}}{{if .Source.AsName}}\n🏢 {{.Source.AsName}}{{end}}{{if .Source.AsNumber}} (AS{{.Source.AsNumber}}){{end}}{{if .Source.Range}}\n📡 Range: `{{.Source.Range}}`{{end}}",
+            "value": "{{if $alert.Source.Cn}}:flag_{{$alert.Source.Cn | lower}}: **{{$alert.Source.Cn}}**{{else}}Unknown{{end}}{{if $alert.Source.AsName}}\n🏢 {{$alert.Source.AsName}}{{end}}{{if $alert.Source.AsNumber}} (AS{{$alert.Source.AsNumber}}){{end}}{{if $alert.Source.Range}}\n📡 Range: `{{$alert.Source.Range}}`{{end}}",
             "inline": false
           },
           {
             "name": "⏰ Timeline",
-            "value": "**Started:** {{.StartAt}}\n**Stopped:** {{.StopAt}}",
+            "value": "**Started:** {{$alert.StartAt}}\n**Stopped:** {{$alert.StopAt}}",
             "inline": true
           },
           {
             "name": "📊 Detection Info",
-            "value": "**Capacity:** {{.Capacity}}\n**Leak Speed:** {{.Leakspeed}}",
+            "value": "**Capacity:** {{$alert.Capacity}}\n**Leak Speed:** {{$alert.Leakspeed}}",
             "inline": true
           }
           {{end -}}

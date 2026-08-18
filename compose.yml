@@ -44,7 +44,7 @@ services:
     image: crowdsecurity/crowdsec:latest
     container_name: crowdsec
     environment:
-      - COLLECTIONS=crowdsecurity/traefik crowdsecurity/http-cve crowdsecurity/appsec-virtual-patching crowdsecurity/appsec-generic-rules crowdsecurity/iptables
+      - COLLECTIONS=crowdsecurity/traefik crowdsecurity/http-cve crowdsecurity/appsec-virtual-patching crowdsecurity/appsec-generic-rules crowdsecurity/iptables crowdsecurity/sshd
       - GID=988  # Docker group GID for socket access
       - UID=1000
     volumes:
@@ -53,6 +53,7 @@ services:
       - ./appsec.yaml:/etc/crowdsec/acquis.d/appsec.yaml:ro
       - ./traefik-logs.yaml:/etc/crowdsec/acquis.d/traefik-logs.yaml:ro
       - ./ufw-logs.yaml:/etc/crowdsec/acquis.d/ufw-logs.yaml:ro
+      - ./auth-logs.yaml:/etc/crowdsec/acquis.d/auth-logs.yaml:ro
       - ./http-discord.yaml:/etc/crowdsec/notifications/http.yaml:ro  # Discord via HTTP notifications
       - ./profiles-discord.yaml:/etc/crowdsec/profiles.yaml:ro  # Profiles with Discord notifications
       - ./crowdsec/whitelist-home.yaml:/etc/crowdsec/parsers/s02-enrich/whitelist-home.yaml:ro  # Whitelist home IPs
