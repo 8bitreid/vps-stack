@@ -5,7 +5,7 @@ secrets:
 services:
 
   traefik:
-    image: "traefik:v3.7.7"
+    image: "traefik:latest"
     container_name: "traefik"
     command:
       - "--configFile=/etc/traefik/traefik.yml"
