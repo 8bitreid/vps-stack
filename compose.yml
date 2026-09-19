@@ -79,6 +79,28 @@ services:
       - management
     restart: unless-stopped
 
+  static-root:
+    image: ghcr.io/static-web-server/static-web-server:2.44.0-alpine
+    container_name: static-root
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      - SERVER_PORT=8080
+      - SERVER_ROOT=/web
+      # Maintenance mode can be toggled here anytime:
+      # - SERVER_MAINTENANCE_MODE=true
+      # - SERVER_MAINTENANCE_MODE_PAGE=/web/maintenance.html
+    volumes:
+      - ./static-root:/web:ro
+    labels:
+      - "traefik.enable=false"
+    networks:
+      - web
+
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
@@ -119,6 +141,8 @@ services:
       - WUD_TRIGGER_DISCORD_1_MODE=batch
       - WUD_TRIGGER_DISCORD_1_BOTUSERNAME=WUD
       - WUD_TRIGGER_DISCORD_1_BATCHTITLE=Container Updates ($${count})
+      - WUD_AUTH_ADMIN_USER=${WUD_AUTH_ADMIN_USER}
+      - WUD_AUTH_ADMIN_PASSWORD=${WUD_AUTH_ADMIN_PASSWORD}
     ports:
       - "${HOST_TAILSCALE_IP}:3000:3000"   # bind only to Tailscale IP
     volumes:
