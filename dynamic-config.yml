@@ -125,6 +125,18 @@ http:
         certResolver: "myresolver"
       service: "noop@internal"
 
+    root-domain:
+      rule: "Host(`cloud-m3.com`)"
+      middlewares:
+        - "geoblock"
+        - "secure-headers"
+        - "crowdsec"
+      entrypoints:
+        - "websecure"
+      tls:
+        certResolver: "myresolver"
+      service: "static-root"
+
     nebula:
       rule: "Host(`nebula.cloud-m3.com`)"
       middlewares:
@@ -180,3 +192,26 @@ http:
         # Forward real client IP to Seerr
         responseForwarding:
           flushInterval: "100ms"
+
+    static-root:
+      loadBalancer:
+        servers:
+          - url: "http://static-root:8080"
+    # -------------------------------------------------------------------
+# 3. Dynamic TLS Options (Hardening TLS 1.2+ & SniStrict)
+# -------------------------------------------------------------------
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: true # Instantly drops IP-based port scanners
+      cipherSuites:
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+      curvePreferences:
+        - CurveP256
+        - X25519
