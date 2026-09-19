@@ -1,27 +1,51 @@
 # Dynamic configuration
 http:
   middlewares:
+    rate-limit-general:
+      rateLimit:
+        average: 20
+        burst: 40
+        sourceCriterion:
+          ipStrategy:
+            depth: 0 # Direct remote IP for Grey Cloud
+
+    rate-limit-sensitive:
+      rateLimit:
+        average: 5
+        burst: 10
+        sourceCriterion:
+          ipStrategy:
+            depth: 0 # Direct remote IP for Grey Cloud
+    # -------------------------------------------------------------------
+    # 2. Maintenance / Offline Error Page Catch
+    # -------------------------------------------------------------------
+    # Captures 502 Bad Gateway or 503 Service Unavailable when Jellyfin/Seerr go down
+    # and automatically routes the client to static-root's maintenance page.
+    app-error-page:
+      errors:
+        status:
+          - "502-503"
+        service: "static-root"
+        query: "/maintenance.html"
+
     # GeoBlock - US only filtering using Cloudflare header (applied before CrowdSec to reduce load)
     geoblock:
       plugin:
         geoblock:
           silentStartUp: false
-          allowLocalRequests: true  # Allow private IPs (Docker, localhost, Tailscale)
-          logLocalRequests: false
-          logAllowedRequests: false
-          logApiRequests: false
-          ipGeolocationHttpHeaderField: "CF-IPCountry"  # Use Cloudflare's free header (case-sensitive!)
-          api: "https://get.geojs.io/v1/ip/country/{ip}"  # Fallback API if header not present
-          apiTimeoutMs: 750
-          cacheSize: 100
+          allowLocalRequests: true
+          ipGeolocationHttpHeaderField: ""
+          api: "https://get.geojs.io/v1/ip/country/{ip}"
+          apiTimeoutMs: 1500
+          cacheSize: 5000
           allowUnknownCountries: false
-          blackListMode: false  # Whitelist mode - only allow listed countries
-          addCountryHeader: true  # Adds X-IPCountry header to requests - visible in access logs
+          blackListMode: false
+          addCountryHeader: true
           countries:
-            - US  # United States only
+            - US
           excludedPathPatterns:
-            - "^[^/]+/health$"  # Health checks
-            - "^[^/]+/status$"  # Status endpoints
+            - "^[^/]+/health$"
+            - "^[^/]+/status$"
           httpStatusCodeDeniedRequest: 403
 
     crowdsec:
@@ -47,6 +71,7 @@ http:
       headers:
         customResponseHeaders:
           Strict-Transport-Security: "max-age=31536000; includeSubDomains"
+          X-Robots-Tag: "noindex, nofollow, noarchive"
           X-Frame-Options: "SAMEORIGIN"
           X-Content-Type-Options: "nosniff"
           Referrer-Policy: "strict-origin-when-cross-origin"
@@ -61,10 +86,11 @@ http:
           X-Forwarded-Proto: "https"
           X-Forwarded-Host: "nebula.cloud-m3.com"
         customResponseHeaders:
-         # Strip Jellyfin identity headers
+          # Strip Jellyfin identity headers
           X-Jellyfin-Os: ""
           X-Jellyfin-Runtime: ""
           Strict-Transport-Security: "max-age=31536000; includeSubDomains"
+          X-Robots-Tag: "noindex, nofollow, noarchive"
           X-Frame-Options: "SAMEORIGIN"
           X-Content-Type-Options: "nosniff"
           Referrer-Policy: "strict-origin-when-cross-origin"
@@ -78,21 +104,6 @@ http:
           Server: ""
           X-Powered-By: ""
 
-    jellygate-headers:
-      headers:
-        customRequestHeaders:
-          X-Forwarded-Proto: "https"
-          X-Forwarded-Host: "jellygate.cloud-m3.com"
-        customResponseHeaders:
-          Strict-Transport-Security: "max-age=31536000; includeSubDomains"
-          X-Frame-Options: "SAMEORIGIN"
-          X-Content-Type-Options: "nosniff"
-          Referrer-Policy: "strict-origin-when-cross-origin"
-          Permissions-Policy: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
-          # Allow Google Fonts for jellygate
-          Content-Security-Policy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' wss: ws: https:; frame-ancestors 'self'; media-src 'self' blob:"
-          Server: ""
-          X-Powered-By: ""
     seerr-headers:
       headers:
         customRequestHeaders:
@@ -100,6 +111,7 @@ http:
           X-Forwarded-Host: "seerr.cloud-m3.com"
         customResponseHeaders:
           Strict-Transport-Security: "max-age=31536000; includeSubDomains"
+          X-Robots-Tag: "noindex, nofollow, noarchive"
           X-Frame-Options: "SAMEORIGIN"
           X-Content-Type-Options: "nosniff"
           Referrer-Policy: "strict-origin-when-cross-origin"
@@ -108,7 +120,6 @@ http:
           Content-Security-Policy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' wss: ws: https:; frame-ancestors 'self'; media-src 'self' blob:"
           Server: ""
           X-Powered-By: ""
-
 
   routers:
     # Explicit router for traefik.cloud-m3.com — no service exposed, but ensures
@@ -140,6 +151,8 @@ http:
     nebula:
       rule: "Host(`nebula.cloud-m3.com`)"
       middlewares:
+        - "rate-limit-general"
+        - "app-error-page" # Triggers static maintenance page if Jellyfin is down
         - "geoblock"
         - "nebula-headers"
         - "crowdsec"
@@ -153,8 +166,10 @@ http:
     seerr:
       rule: "Host(`request.cloud-m3.com`)"
       middlewares:
+        - "rate-limit-general"
+        - "app-error-page" # Triggers static maintenance page if Jellyfin is down
         - "geoblock"
-        - "seerr-headers"
+        - "secure-headers"
         - "crowdsec"
       entrypoints:
         - "websecure"
@@ -171,8 +186,8 @@ http:
         - "websecure"
       tls:
         certResolver: "myresolver"
-      priority: 100  # Higher priority than main nebula router
-      service: "noop@internal"  # Use internal noop service
+      priority: 100 # Higher priority than main nebula router
+      service: "noop@internal" # Use internal noop service
 
   services:
     nebula:
