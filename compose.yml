@@ -119,6 +119,8 @@ services:
       - WUD_TRIGGER_DISCORD_1_MODE=batch
       - WUD_TRIGGER_DISCORD_1_BOTUSERNAME=WUD
       - WUD_TRIGGER_DISCORD_1_BATCHTITLE=Container Updates ($${count})
+      - WUD_AUTH_ADMIN_USER=${WUD_AUTH_ADMIN_USER}
+      - WUD_AUTH_ADMIN_PASSWORD=${WUD_AUTH_ADMIN_PASSWORD}
     ports:
       - "${HOST_TAILSCALE_IP}:3000:3000"   # bind only to Tailscale IP
     volumes:
