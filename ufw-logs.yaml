@@ -1,4 +1,4 @@
 filenames:
   - /var/log/ufw.log
 labels:
-  type: iptables
+  type: syslog
